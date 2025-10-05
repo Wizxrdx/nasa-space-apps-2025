@@ -1,0 +1,7 @@
+/venv
+*pycache*/
+*.pyc
+models/*
+!models/default/
+!models/registry.json
+data/
