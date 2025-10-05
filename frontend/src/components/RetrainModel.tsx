@@ -97,7 +97,7 @@ export default function RetrainModel({
       if (targetVersion) qs.set('version', targetVersion);
       if (evaluate) qs.set('evaluate', 'true');
 
-      const resp = await fetch(`https://52.77.216.0:8000/api/v1/retrain/?${qs.toString()}`, {
+      const resp = await fetch(`https://api.wizxrdx.me/api/v1/retrain/?${qs.toString()}`, {
         method: 'POST',
         body: form,
       });

@@ -20,7 +20,7 @@ export default function Footer({
   snap = false,
   sampleHref = '/samples',
   classifyHref = '/classify',
-  githubHref = 'https://github.com/Wizxrdx',
+  githubHref = 'https://github.com/Wizxrdx/nasa-space-apps-2025',
   showCTAButtons = true,
   showLinks = true,
 }: Props) {
