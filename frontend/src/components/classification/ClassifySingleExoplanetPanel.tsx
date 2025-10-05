@@ -53,7 +53,7 @@ export default function ClassifySingleExoplanetPanel({
     (async () => {
       try {
         setModelsLoading(true);
-        const resp = await fetch('http://localhost:8000/api/v1/models/all/', { signal: ac.signal });
+        const resp = await fetch('http://52.77.216.0:8000/api/v1/models/all/', { signal: ac.signal });
         if (!resp.ok) throw new Error(`Failed to fetch models (HTTP ${resp.status})`);
         const data = (await resp.json()) as ModelsResponse;
         const map = data?.all_models ?? {};
@@ -174,7 +174,7 @@ export default function ClassifySingleExoplanetPanel({
       qs.set('model', modelName);
       if (versioned && modelVersion) qs.set('version', modelVersion);
 
-      const resp = await fetch(`http://localhost:8000/api/v1/predict/single/?${qs.toString()}`, {
+      const resp = await fetch(`http://52.77.216.0:8000/api/v1/predict/single/?${qs.toString()}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ data }),
