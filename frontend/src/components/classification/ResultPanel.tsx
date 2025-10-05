@@ -7,7 +7,7 @@ import InputGroup from '../classification/InputGroup';
 type Prediction = {
   label: 'Confirmed' | 'Candidate' | 'False Positive';
   color: 'teal' | 'yellow' | 'red';
-  contributions: { group: string; value: number }[]; // kept for backward-compat
+  contributions: { group: string; value: number }[];
 };
 
 type ShapValues = {
@@ -20,30 +20,27 @@ export default function ResultPanel({
   pred,
   showExplain,
   onReset,
-  shapValues, // NEW: optional SHAP payload from /predict/single/
+  shapValues,
 }: {
   pred: Prediction | null;
   showExplain: boolean;
   onReset: () => void;
   shapValues?: ShapValues | null;
 }) {
-  if (!pred) return null;
-
-  // Build contributions list: prefer SHAP > legacy contributions
+  // Build contributions list first (Hooks must be top-level)
   const contributions = useMemo(() => {
+    if (!pred) return [] as { group: string; value: number }[];
     if (shapValues?.per_feature) {
       return Object.entries(shapValues.per_feature).map(([group, value]) => ({ group, value }));
     }
     return pred.contributions || [];
-  }, [shapValues, pred]);
+  }, [pred, shapValues]);
 
-  // Sort by absolute impact
   const sorted = useMemo(
     () => [...contributions].sort((a, b) => Math.abs(b.value) - Math.abs(a.value)),
     [contributions]
   );
 
-  // Helpful/harmful split for quick reading
   const helpful = useMemo(() => sorted.filter((x) => x.value > 0).slice(0, 5), [sorted]);
   const harmful = useMemo(() => sorted.filter((x) => x.value < 0).slice(0, 5), [sorted]);
 
@@ -57,10 +54,13 @@ export default function ResultPanel({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `shap_contributions_${pred?.label.toLowerCase()}.csv`;
+    const base = pred?.label?.toLowerCase?.() ?? 'result';
+    a.download = `shap_contributions_${base}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
+
+  if (!pred) return null;
 
   return (
     <InputGroup
@@ -98,7 +98,6 @@ export default function ResultPanel({
               Positive values support the prediction; negative values oppose it. Magnitude reflects relative impact (SHAP value).
             </Text>
 
-            {/* Side-by-side Top 5 only */}
             <Group justify="space-between" mt="sm" align="flex-start" wrap="nowrap">
               <Stack gap={2} style={{ minWidth: 0, flex: 1 }}>
                 <Text fw={700} size="sm">Top 5 Helpful</Text>

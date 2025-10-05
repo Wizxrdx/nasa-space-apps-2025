@@ -15,7 +15,7 @@ export default function EvaluationTable({ evaluation, onClear }: EvaluationTable
   if (!evaluation) return null;
 
   const accuracy = typeof evaluation?.accuracy === 'number' ? (evaluation.accuracy as number) : undefined;
-  const metricKeys = Object.keys(evaluation).filter((k) => k !== 'accuracy' && typeof (evaluation as any)[k] === 'object');
+  const metricKeys = Object.keys(evaluation).filter((k) => k !== 'accuracy' && typeof (evaluation)[k] === 'object');
   const orderedMetricKeys = metricKeys
     .filter((k) => !['macro avg', 'weighted avg'].includes(k))
     .concat(['macro avg', 'weighted avg'].filter((k) => metricKeys.includes(k)));
@@ -52,7 +52,7 @@ export default function EvaluationTable({ evaluation, onClear }: EvaluationTable
           </Table.Thead>
           <Table.Tbody>
             {orderedMetricKeys.map((k) => {
-              const m = (evaluation as any)[k] as EvalMetrics | undefined;
+              const m = evaluation[k] as EvalMetrics | undefined;
               if (!m) return null;
               return (
                 <Table.Tr key={k}>

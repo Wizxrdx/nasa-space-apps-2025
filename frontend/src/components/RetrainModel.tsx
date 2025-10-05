@@ -72,7 +72,7 @@ export default function RetrainModel({
       persist();
 
       // Build CSV from current table headers, excluding UI columns like prediction
-      let sendHeaders = headers.filter((h) => h && h !== 'prediction');
+      const sendHeaders = headers.filter((h) => h && h !== 'prediction');
       // Ensure 'label' is included for training
       if (!sendHeaders.includes('label') && headers.includes('label')) sendHeaders.push('label');
 
@@ -103,7 +103,7 @@ export default function RetrainModel({
       });
       if (!resp.ok) {
         const err = await resp.json().catch(() => null);
-        throw new Error((err as any)?.detail || `HTTP ${resp.status}`);
+        throw new Error((err)?.detail || `HTTP ${resp.status}`);
       }
       const data = (await resp.json()) as {
         message?: string;
@@ -125,8 +125,9 @@ export default function RetrainModel({
           } started.`,
       });
       setOpened(false);
-    } catch (e: any) {
-      notifications.show({ color: 'red', title: 'Retrain failed', message: e?.message || 'Request failed' });
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Request failed';
+      notifications.show({ color: 'red', title: 'Retrain failed', message });
     } finally {
       setLoading(false);
     }

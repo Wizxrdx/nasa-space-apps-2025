@@ -21,8 +21,12 @@ export interface ClassifyExoplanetProps {
   buttonSize?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   buttonVariant?: 'filled' | 'light' | 'outline' | 'default' | 'subtle';
   buttonLabel?: string;
-  onEvaluation?: (evaluation: Evaluation) => void; // NEW
-  onPredictions?: (labels: string[], meta?: { rows?: number; model_version?: string; evaluation?: Evaluation }) => void; // NEW
+  onEvaluation?: (evaluation: Evaluation) => void;
+  onPredictions?: (labels: string[], meta?: { rows?: number; model_version?: string; evaluation?: Evaluation }) => void;
+}
+
+function isErrorDetail(val: unknown): val is { detail?: unknown } {
+  return typeof val === 'object' && val !== null && 'detail' in val;
 }
 
 export default function ClassifyExoplanet({
@@ -58,9 +62,7 @@ export default function ClassifyExoplanet({
     [buttonLabel, modelName, modelVersion]
   );
 
-  const allowedHeaders = useMemo(() => [...REQUIRED_HEADERS, ...OPTIONAL_HEADERS], []);
-
-  // Fetch models every time the modal opens; abort if re-opened fast
+  // Fetch models on modal open; abort if re-opened fast
   useEffect(() => {
     if (!opened) return;
 
@@ -71,7 +73,6 @@ export default function ClassifyExoplanet({
     (async () => {
       try {
         setModelsLoading(true);
-        // keep /all/
         const resp = await fetch('http://localhost:8000/api/v1/models/all/', { signal: ac.signal });
         if (!resp.ok) throw new Error(`Failed to fetch models (HTTP ${resp.status})`);
         const data = (await resp.json()) as ModelsResponse;
@@ -79,7 +80,7 @@ export default function ClassifyExoplanet({
         setModelsMap(map);
 
         // Build combined list: base array entries + other keys
-        const baseList = Array.isArray((map as any).base) ? ((map as any).base as string[]) : [];
+        const baseList = Array.isArray(map.base) ? map.base : [];
         const versionedNames = Object.keys(map).filter((k) => k !== 'base');
         const combinedNames = [...baseList, ...versionedNames];
 
@@ -87,21 +88,18 @@ export default function ClassifyExoplanet({
           const nextModel = combinedNames.includes(modelName) ? modelName : combinedNames[0];
           if (nextModel !== modelName) setModelName(nextModel);
 
-          const versions = Array.isArray((map as any)[nextModel]) ? ((map as any)[nextModel] as string[]) : [];
+          const versions = Array.isArray(map[nextModel]) ? map[nextModel] : [];
           const isVersioned = versions.length > 0 && versions.every((v) => /^\d+$/.test(v));
-          if (isVersioned) {
-            // start empty; user must pick a version
-            if (modelVersion) setModelVersion('');
-          } else if (modelVersion) {
-            setModelVersion('');
-          }
+          // reset version selection when switching model
+          setModelVersion(isVersioned ? '' : '');
         } else {
           setModelName('');
           setModelVersion('');
         }
-      } catch (e: any) {
-        if (e?.name !== 'AbortError') {
-          notifications.show({ color: 'red', title: 'Models fetch failed', message: e?.message || 'Unable to load models' });
+      } catch (e: unknown) {
+        if (!(e instanceof DOMException && e.name === 'AbortError')) {
+          const message = e instanceof Error ? e.message : 'Unable to load models';
+          notifications.show({ color: 'red', title: 'Models fetch failed', message });
         }
       } finally {
         if (!ac.signal.aborted) setModelsLoading(false);
@@ -110,26 +108,28 @@ export default function ClassifyExoplanet({
     })();
 
     return () => ac.abort();
-  }, [opened]); // fetch on every open
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [opened]);
 
   const modelOptions = useMemo(() => {
-    const baseList = Array.isArray((modelsMap as any).base) ? ((modelsMap as any).base as string[]) : [];
+    const baseList = Array.isArray(modelsMap.base) ? modelsMap.base : [];
     const versionedNames = Object.keys(modelsMap).filter((k) => k !== 'base');
     return [
-      ...baseList.map((n) => ({ value: n, label: n })),           // base models (no versions)
-      ...versionedNames.map((n) => ({ value: n, label: n })),      // versioned models (keys)
+      ...baseList.map((n) => ({ value: n, label: n })),
+      ...versionedNames.map((n) => ({ value: n, label: n })),
     ];
   }, [modelsMap]);
 
-  const currentVersions = (modelName && Array.isArray((modelsMap as any)[modelName]))
-    ? (((modelsMap as any)[modelName] as string[]))
-    : [];
+  const currentVersions = useMemo(() => {
+    if (!modelName) return [] as string[];
+    const arr = modelsMap[modelName];
+    return Array.isArray(arr) ? arr : [];
+  }, [modelName, modelsMap]);
+
   const versioned = currentVersions.length > 0 && currentVersions.every((v) => /^\d+$/.test(v));
+
   const versionOptions = useMemo(
-    () =>
-      versioned
-        ? [...currentVersions].sort((a, b) => Number(b) - Number(a)).map((v) => ({ value: v, label: v }))
-        : [],
+    () => (versioned ? [...currentVersions].sort((a, b) => Number(b) - Number(a)).map((v) => ({ value: v, label: v })) : []),
     [currentVersions, versioned]
   );
 
@@ -159,7 +159,7 @@ export default function ClassifyExoplanet({
       persistParams();
 
       // Decide which headers to send:
-      const allowed = new Set([...REQUIRED_HEADERS, ...OPTIONAL_HEADERS]);
+      const allowed = new Set<string>([...REQUIRED_HEADERS, ...OPTIONAL_HEADERS]);
 
       // Start from current table headers to preserve order
       let sendHeaders = headers.filter((h) => allowed.has(h));
@@ -180,7 +180,6 @@ export default function ClassifyExoplanet({
       const hasLabel = sendHeaders.includes('label') || headers.includes('label');
 
       if (evaluate) {
-        // Require a real label column if evaluation is requested
         if (!hasLabel) {
           notifications.show({
             color: 'yellow',
@@ -189,16 +188,13 @@ export default function ClassifyExoplanet({
           });
           return;
         }
-        // Ensure label is included (in case it exists in headers but got filtered out above)
         if (!sendHeaders.includes('label') && headers.includes('label') && allowed.has('label')) {
           sendHeaders.push('label');
         }
       } else {
-        // If not evaluating, strip label to avoid sending it unnecessarily
         sendHeaders = sendHeaders.filter((h) => h !== 'label');
       }
 
-      // Build row objects limited to sendHeaders and sanitize values
       const sendRowsRaw = rows.map((r) => {
         const o: Record<string, string> = {};
         for (const h of sendHeaders) {
@@ -211,7 +207,6 @@ export default function ClassifyExoplanet({
         return o;
       });
 
-      // Drop rows that are entirely empty across all sendHeaders
       const sendRows = sendRowsRaw.filter((r) => sendHeaders.some((h) => r[h] !== ''));
 
       if (sendRows.length === 0) {
@@ -239,8 +234,9 @@ export default function ClassifyExoplanet({
 
       const resp = await fetch(`http://localhost:8000/api/v1/predict/?${qs.toString()}`, { method: 'POST', body: form });
       if (!resp.ok) {
-        const err = await resp.json().catch(() => null);
-        throw new Error((err as any)?.detail || `HTTP ${resp.status}`);
+        const errJson = await resp.json().catch(() => null) as unknown;
+        const msg = isErrorDetail(errJson) && typeof errJson.detail === 'string' ? errJson.detail : `HTTP ${resp.status}`;
+        throw new Error(msg);
       }
       const data = (await resp.json()) as {
         prediction: string[];
@@ -255,12 +251,10 @@ export default function ClassifyExoplanet({
       }
 
       setHeaders((prev) => (prev.includes('prediction') ? prev : [...prev, 'prediction']));
-      // Only annotate the rows we actually sent; leave others untouched
       setRows((prev) => {
         const annotated: Row[] = [];
         let idx = 0;
         for (const r of prev) {
-          // Determine if this row would have been included (all-empty rows were dropped)
           const candidate: Record<string, string> = {};
           for (const h of sendHeaders) {
             const v = r[h] as unknown;
@@ -270,20 +264,12 @@ export default function ClassifyExoplanet({
                 : String(v).trim();
           }
           const wasSent = sendHeaders.some((h) => candidate[h] !== '');
-          if (wasSent) {
-            annotated.push({ ...r, prediction: String(data.prediction[idx++] ?? '') });
-          } else {
-            annotated.push(r);
-          }
+          annotated.push(wasSent ? { ...r, prediction: String(data.prediction[idx++] ?? '') } : r);
         }
         return annotated;
       });
 
-      // Pass evaluation up to DataPage (if present)
-      if (data.evaluation) {
-        onEvaluation?.(data.evaluation);
-      }
-      // Pass predictions up so the page can show ResultPanel
+      if (data.evaluation) onEvaluation?.(data.evaluation);
       onPredictions?.(data.prediction, {
         rows: data.rows,
         model_version: data.model_version,
@@ -296,8 +282,9 @@ export default function ClassifyExoplanet({
         message: `Predicted ${data.rows ?? sendRows.length} rows${data.model_version ? ` (model ${data.model_version})` : ''}.`,
       });
       setOpened(false);
-    } catch (e: any) {
-      notifications.show({ color: 'red', title: 'Classification failed', message: e?.message || 'Request failed' });
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Request failed';
+      notifications.show({ color: 'red', title: 'Classification failed', message });
     } finally {
       setLoading(false);
     }
@@ -317,7 +304,6 @@ export default function ClassifyExoplanet({
             });
             return;
           }
-          // Sanitize rows: replace undefined/null/'undefined'/'null' with ''
           const cleaned = rows.map((r) => {
             const o: Record<string, string> = {};
             for (const h of headers) {
@@ -346,9 +332,8 @@ export default function ClassifyExoplanet({
             onChange={(value) => {
               const v = value || '';
               setModelName(v);
-              const versions = Array.isArray((modelsMap as any)[v]) ? ((modelsMap as any)[v] as string[]) : [];
+              const versions = Array.isArray(modelsMap[v]) ? (modelsMap[v] as string[]) : [];
               const isVersioned = versions.length > 0 && versions.every((t) => /^\d+$/.test(t));
-              // require user to pick a version when versioned
               setModelVersion(isVersioned ? '' : '');
             }}
             searchable

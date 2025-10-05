@@ -147,8 +147,8 @@ export default function HomePage() {
     container.addEventListener('touchend', onTouchEnd);
 
     return () => {
-      container.removeEventListener('wheel', onWheel as any);
-      window.removeEventListener('keydown', onKey as any);
+      container.removeEventListener('wheel', onWheel);
+      window.removeEventListener('keydown', onKey);
       container.removeEventListener('touchend', onTouchEnd);
     };
   }, []);

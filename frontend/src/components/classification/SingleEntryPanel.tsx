@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo } from 'react';
 import { Grid, Accordion, NumberInput, Paper, Text, Group } from '@mantine/core'; // removed Badge
 import { FEATURE_GROUPS, IMPORTANT_HEADERS } from '@/lib/csvColumns';
+import { Prediction } from '../../app/classification/page';
 
 type ShapValues = { class_index: number; base_value: number; per_feature: Record<string, number> };
 
@@ -14,7 +15,7 @@ function toLabel(col: string) {
 }
 
 export default function SingleEntryPanel(props: {
-  predA: any;
+  predA: React.SetStateAction<Prediction | null>;
   reset: () => void;
   showExplain: boolean;
   setShowExplain: (v: boolean) => void;

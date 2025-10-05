@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Container, Stack, Title, Text, Group, Button, Divider, Box } from '@mantine/core';
+import { Container, Stack, Text, Group, Button, Divider, Box } from '@mantine/core';
 
 type Props = {
   id?: string;

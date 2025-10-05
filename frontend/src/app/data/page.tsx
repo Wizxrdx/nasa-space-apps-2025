@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
-import { Container, Title, Space, Group, Button, Center, Loader, Text, Tooltip, ActionIcon, Box } from '@mantine/core';
+import React, { Suspense, useEffect, useRef, useState } from 'react';
+import { Container, Title, Space, Group, Button, Center, Loader, Text, Tooltip, ActionIcon } from '@mantine/core'; // removed Box
 import { IconHelpCircle } from '@tabler/icons-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getCsv } from '../../lib/csvStore';
@@ -13,59 +13,11 @@ import RetrainModel from '../../components/RetrainModel';
 
 const PAGE_SIZE = 30; // only render 30 rows at a time
 
-// Build a compact pagination model with boundary and sibling ranges
-function range(start: number, end: number): number[] {
-  const out: number[] = [];
-  for (let i = start; i <= end; i++) out.push(i);
-  return out;
-}
-
-function getPages(total: number, current: number, boundaryCount = 1, siblingCount = 1): Array<number | 'dots'> {
-  if (total <= 0) return [];
-  const totalNumbers = boundaryCount * 2 + siblingCount * 2 + 3; // incl. current
-  if (total <= totalNumbers) return range(1, total);
-
-  const startPages = range(1, boundaryCount);
-  const endPages = range(total - boundaryCount + 1, total);
-
-  const siblingsStart = Math.max(current - siblingCount, boundaryCount + 1);
-  const siblingsEnd = Math.min(current + siblingCount, total - boundaryCount);
-
-  const pages: Array<number | 'dots'> = [];
-  pages.push(...startPages);
-
-  if (siblingsStart > boundaryCount + 1) {
-    pages.push('dots');
-  } else if (boundaryCount + 1 < siblingsStart) {
-    pages.push(...range(boundaryCount + 1, siblingsStart - 1));
-  }
-
-  pages.push(...range(siblingsStart, siblingsEnd));
-
-  if (siblingsEnd < total - boundaryCount) {
-    pages.push('dots');
-  } else if (siblingsEnd + 1 < total - boundaryCount + 1) {
-    pages.push(...range(siblingsEnd + 1, total - boundaryCount));
-  }
-
-  pages.push(...endPages);
-
-  // De-duplicate in case of overlaps
-  const dedup: Array<number | 'dots'> = [];
-  let prev: number | 'dots' | null = null;
-  for (const p of pages) {
-    if (p === prev && p === 'dots') continue;
-    if (typeof p === 'number' && typeof prev === 'number' && p === prev) continue;
-    dedup.push(p);
-    prev = p;
-  }
-  return dedup;
-}
-
 type EvalMetrics = { precision: number; recall: number; 'f1-score': number; support: number };
 type Evaluation = Record<string, EvalMetrics | number>;
 
-export default function DataPage() {
+// Rename the original component to a client inner component
+function DataPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -74,10 +26,6 @@ export default function DataPage() {
   const [name, setName] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [editingPage, setEditingPage] = useState(false);
-  const [pageEditValue, setPageEditValue] = useState('');
-  const [modelsMap, setModelsMap] = useState<Record<string, string[]>>({});
-  const [modelsLoading, setModelsLoading] = useState(false);
   const [evaluation, setEvaluation] = useState<Evaluation | null>(null);
 
   // Prevent multiple navigations/loops on param changes
@@ -194,19 +142,9 @@ export default function DataPage() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (e) {
-      // no-op; optionally show a notification in the future
       console.error('Failed to export CSV', e);
     }
   };
-
-  // Helpers to render evaluation
-  const accuracy = typeof evaluation?.accuracy === 'number' ? (evaluation!.accuracy as number) : undefined;
-  const metricKeys = evaluation
-    ? Object.keys(evaluation).filter((k) => k !== 'accuracy' && typeof (evaluation as any)[k] === 'object')
-    : [];
-  const orderedMetricKeys = metricKeys
-    .filter((k) => !['macro avg', 'weighted avg'].includes(k))
-    .concat(['macro avg', 'weighted avg'].filter((k) => metricKeys.includes(k)));
 
   if (loading) {
     return (
@@ -290,8 +228,15 @@ export default function DataPage() {
         onAddRow={handleAddRow}
         onExportCsv={handleExportCsv}
       />
-
-      {/* Pagination moved into CsvTable */}
     </Container>
+  );
+}
+
+// New default export: wrap in Suspense to satisfy Next.js requirement
+export default function DataPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: 16 }}>Loading…</div>}>
+      <DataPageInner />
+    </Suspense>
   );
 }

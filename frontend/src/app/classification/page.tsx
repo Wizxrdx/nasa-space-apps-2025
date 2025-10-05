@@ -1,14 +1,13 @@
 'use client';
 
 import React, { useCallback, useMemo, useState } from 'react';
-import { Container, Divider, Grid, Group, Paper, Stack, Text, Title } from '@mantine/core';
+import { Container, Divider, Grid, Group, Stack, Text, Title } from '@mantine/core'; // removed Paper
 import { FEATURE_GROUPS } from '@/lib/csvColumns';
 import ClassifySingleExoplanetPanel from '@/components/classification/ClassifySingleExoplanetPanel';
 import SingleEntryPanel from '@/components/classification/SingleEntryPanel';
 import ResultPanel from '@/components/classification/ResultPanel';
-import Footer from '@/components/Footer';
 
-type Prediction = {
+export type Prediction = {
   label: 'Confirmed' | 'Candidate' | 'False Positive';
   color: 'teal' | 'yellow' | 'red';
   contributions: { group: string; value: number }[];
@@ -31,8 +30,8 @@ export default function ClassificationPage() {
   });
 
   // Table state used by the CSV ClassifyExoplanet button (kept for SingleEntryPanel sync)
-  const [headers, setHeaders] = useState<string[]>([]);
-  const [rows, setRows] = useState<Record<string, string>[]>([]);
+  const [, setHeaders] = useState<string[]>([]);
+  const [, setRows] = useState<Record<string, string>[]>([]);
 
   const reset = useCallback(() => {
     setPredA(null);
@@ -59,71 +58,55 @@ export default function ClassificationPage() {
   );
 
   return (
-    <>
-      <Container size="xl" px="md" py="md">
-        <Stack gap="sm">
-          <Group align="center" justify="space-between">
-            <div>
-              <Title order={2}>Classification Sandbox</Title>
-              <Text c="dimmed" size="sm">{headerNote}</Text>
+    <Container size="xl" px="md" py="md">
+      <Stack gap="sm">
+        <Group align="center" justify="space-between">
+          <div>
+            <Title order={2}>Classification Sandbox</Title>
+            <Text c="dimmed" size="sm">{headerNote}</Text>
+          </div>
+
+          {/* Removed top-right classify button; use sidebar panel instead */}
+        </Group>
+
+        <Divider my="sm" />
+
+        <Grid gutter="xl" align="flex-start">
+          {/* Left: inputs */}
+          <Grid.Col span={{ base: 12, lg: 8 }}>
+            <SingleEntryPanel
+              predA={predA}
+              reset={reset}
+              showExplain={showExplain}
+              setShowExplain={setShowExplain}
+              inputs={inputs}
+              setInputs={setInputs}
+              setHeaders={setHeaders}
+              setRows={setRows}
+              shapValues={shapValues}
+            />
+          </Grid.Col>
+
+          {/* Right: panel when no result, result when available */}
+          <Grid.Col span={{ base: 12, lg: 4 }}>
+            <div style={{ position: 'sticky', top: 16 }}>
+              {predA ? (
+                <ResultPanel
+                  pred={predA}
+                  showExplain={showExplain}
+                  onReset={reset}
+                  shapValues={shapValues ?? undefined}
+                />
+              ) : (
+                <ClassifySingleExoplanetPanel
+                  inputs={inputs}
+                  onPredictions={handlePredictions} // reuse handler; removes any-cast
+                />
+              )}
             </div>
-
-            {/* Removed top-right classify button; use sidebar panel instead */}
-          </Group>
-
-          <Divider my="sm" />
-
-          <Grid gutter="xl" align="flex-start">
-            {/* Left: inputs */}
-            <Grid.Col span={{ base: 12, lg: 8 }}>
-              <SingleEntryPanel
-                predA={predA}
-                reset={reset}
-                showExplain={showExplain}
-                setShowExplain={setShowExplain}
-                inputs={inputs}
-                setInputs={setInputs}
-                setHeaders={setHeaders}
-                setRows={setRows}
-                shapValues={shapValues}
-              />
-            </Grid.Col>
-
-            {/* Right: panel when no result, result when available */}
-            <Grid.Col span={{ base: 12, lg: 4 }}>
-              <div style={{ position: 'sticky', top: 16 }}>
-                {predA ? (
-                  <ResultPanel
-                    pred={predA}
-                    showExplain={showExplain}
-                    onReset={reset}
-                    shapValues={shapValues ?? undefined}
-                  />
-                ) : (
-                  <ClassifySingleExoplanetPanel
-                    inputs={inputs}
-                    onPredictions={(labels, meta) => {
-                      const first = (labels && labels[0]) || '';
-                      const norm = String(first).toLowerCase();
-                      const label: 'Confirmed' | 'Candidate' | 'False Positive' =
-                        norm.includes('confirm') ? 'Confirmed' :
-                        norm.includes('false') ? 'False Positive' :
-                        'Candidate';
-                      const color: 'teal' | 'yellow' | 'red' =
-                        label === 'Confirmed' ? 'teal' : label === 'False Positive' ? 'red' : 'yellow';
-                      setPredA({ label, color, contributions: [] });
-                      setShapValues((meta as any)?.shap_values ?? null);
-                    }}
-                  />
-                )}
-              </div>
-            </Grid.Col>
-          </Grid>
-        </Stack>
-      </Container>
-
-      {/* Footer below the page content */}
-      <Footer showCTAButtons={false} classifyHref="/classification" />
-    </>
+          </Grid.Col>
+        </Grid>
+      </Stack>
+    </Container>
   );
 }

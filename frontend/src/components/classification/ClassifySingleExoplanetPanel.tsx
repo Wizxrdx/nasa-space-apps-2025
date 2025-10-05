@@ -6,26 +6,35 @@ import { notifications } from '@mantine/notifications';
 import { REQUIRED_HEADERS, OPTIONAL_HEADERS, IMPORTANT_HEADERS } from '@/lib/csvColumns';
 
 type ModelsResponse = { all_models: Record<string, string[]> };
+type ShapValues = { class_index: number; base_value: number; per_feature: Record<string, number> };
+
+function isErrorDetail(val: unknown): val is { detail?: unknown } {
+  return typeof val === 'object' && val !== null && 'detail' in val;
+}
 
 export default function ClassifySingleExoplanetPanel({
   inputs,
   onPredictions,
 }: {
   inputs: Record<string, number | boolean | ''>;
-  onPredictions?: (labels: string[], meta?: { model_version?: string; shap_values?: any }) => void;
+  onPredictions?: (labels: string[], meta?: { model_version?: string; shap_values?: ShapValues }) => void;
 }) {
   const [loading, setLoading] = useState(false);
 
   // Persisted params
   const [modelName, setModelName] = useState<string>('');
   const [modelVersion, setModelVersion] = useState<string>('');
+  const initialModelNameRef = useRef<string>('');
   useEffect(() => {
     try {
       const m = localStorage.getItem('cls:model') || localStorage.getItem('single:model') || '';
       const v = localStorage.getItem('cls:version') || localStorage.getItem('single:version') || '';
       if (m) setModelName(m);
       if (v) setModelVersion(v);
-    } catch {}
+      initialModelNameRef.current = m || '';
+    } catch {
+      // ignore storage errors
+    }
   }, []);
 
   // Models
@@ -33,8 +42,9 @@ export default function ClassifySingleExoplanetPanel({
   const [modelsLoading, setModelsLoading] = useState(false);
   const inflightRef = useRef<AbortController | null>(null);
 
-  const allowedHeaders = useMemo(() => new Set([...REQUIRED_HEADERS, ...OPTIONAL_HEADERS]), []);
+  const allowedHeaders = useMemo(() => new Set<string>([...REQUIRED_HEADERS, ...OPTIONAL_HEADERS]), []);
 
+  // Load models once on mount (no modelName dependency here)
   useEffect(() => {
     inflightRef.current?.abort();
     const ac = new AbortController();
@@ -49,25 +59,26 @@ export default function ClassifySingleExoplanetPanel({
         const map = data?.all_models ?? {};
         setModelsMap(map);
 
-        // Compose list like the modal: base array + versioned keys
-        const baseList = Array.isArray((map as any).base) ? ((map as any).base as string[]) : [];
+        // Compose list: base array + versioned keys
+        const baseList: string[] = Array.isArray(map.base) ? map.base : [];
         const versionedNames = Object.keys(map).filter((k) => k !== 'base');
         const combinedNames = [...baseList, ...versionedNames];
 
         if (combinedNames.length) {
-          const nextModel = combinedNames.includes(modelName) ? modelName : combinedNames[0];
-          if (nextModel !== modelName) setModelName(nextModel);
-
-          const versions = Array.isArray((map as any)[nextModel]) ? ((map as any)[nextModel] as string[]) : [];
+          const preferred = initialModelNameRef.current;
+          const nextModel = preferred && combinedNames.includes(preferred) ? preferred : combinedNames[0];
+          setModelName((prev) => (prev || nextModel));
+          const versions = Array.isArray(map[nextModel]) ? map[nextModel] : [];
           const isVersioned = versions.length > 0 && versions.every((v) => /^\d+$/.test(v));
           setModelVersion(isVersioned ? '' : '');
         } else {
           setModelName('');
           setModelVersion('');
         }
-      } catch (e: any) {
-        if (e?.name !== 'AbortError') {
-          notifications.show({ color: 'red', title: 'Models fetch failed', message: e?.message || 'Unable to load models' });
+      } catch (e: unknown) {
+        if (!(e instanceof DOMException && e.name === 'AbortError')) {
+          const message = e instanceof Error ? e.message : 'Unable to load models';
+          notifications.show({ color: 'red', title: 'Models fetch failed', message });
         }
       } finally {
         if (!ac.signal.aborted) setModelsLoading(false);
@@ -76,26 +87,30 @@ export default function ClassifySingleExoplanetPanel({
     })();
 
     return () => ac.abort();
-  }, []); // load once
+  }, []);
 
-  const modelOptions = useMemo(() => {
-    const baseList = Array.isArray((modelsMap as any).base) ? ((modelsMap as any).base as string[]) : [];
-    const versionedNames = Object.keys(modelsMap).filter((k) => k !== 'base');
-    return [
-      ...baseList.map((n) => ({ value: n, label: n })),
-      ...versionedNames.map((n) => ({ value: n, label: n })),
-    ];
-  }, [modelsMap]);
+  const modelOptions = useMemo(
+    () => {
+      const baseList: string[] = Array.isArray(modelsMap.base) ? modelsMap.base : [];
+      const versionedNames = Object.keys(modelsMap).filter((k) => k !== 'base');
+      return [
+        ...baseList.map((n) => ({ value: n, label: n })),
+        ...versionedNames.map((n) => ({ value: n, label: n })),
+      ];
+    },
+    [modelsMap]
+  );
 
-  const currentVersions = (modelName && Array.isArray((modelsMap as any)[modelName]))
-    ? (((modelsMap as any)[modelName] as string[]))
-    : [];
+  const currentVersions = useMemo(() => {
+    if (!modelName) return [] as string[];
+    const arr = modelsMap[modelName];
+    return Array.isArray(arr) ? arr : [];
+  }, [modelName, modelsMap]);
+
   const versioned = currentVersions.length > 0 && currentVersions.every((v) => /^\d+$/.test(v));
+
   const versionOptions = useMemo(
-    () =>
-      versioned
-        ? [...currentVersions].sort((a, b) => Number(b) - Number(a)).map((v) => ({ value: v, label: v }))
-        : [],
+    () => (versioned ? [...currentVersions].sort((a, b) => Number(b) - Number(a)).map((v) => ({ value: v, label: v })) : []),
     [currentVersions, versioned]
   );
 
@@ -105,7 +120,9 @@ export default function ClassifySingleExoplanetPanel({
       localStorage.setItem('cls:version', modelVersion);
       localStorage.setItem('single:model', modelName);
       localStorage.setItem('single:version', modelVersion);
-    } catch {}
+    } catch {
+      // ignore storage errors
+    }
   }
 
   async function handleClassify() {
@@ -163,12 +180,15 @@ export default function ClassifySingleExoplanetPanel({
         body: JSON.stringify({ data }),
       });
       if (!resp.ok) {
-        const err = await resp.json().catch(() => null);
-        throw new Error((err as any)?.detail || `HTTP ${resp.status}`);
+        const errJson: unknown = await resp.json().catch(() => null);
+        const message = isErrorDetail(errJson) && typeof errJson.detail === 'string' ? errJson.detail : `HTTP ${resp.status}`;
+        throw new Error(message);
       }
 
-      const json = (await resp.json()) as { prediction: string; shap_values?: any; model_version?: string };
+      type SinglePredictionResponse = { prediction: string; shap_values?: ShapValues; model_version?: string };
+      const json = (await resp.json()) as SinglePredictionResponse;
       const label = json?.prediction ?? '';
+
       onPredictions?.([String(label)], {
         model_version: json?.model_version ?? (versioned ? modelVersion : undefined),
         shap_values: json?.shap_values,
@@ -179,8 +199,9 @@ export default function ClassifySingleExoplanetPanel({
         title: 'Classification complete',
         message: `Predicted: ${String(label)}${json?.model_version ? ` (model ${json.model_version})` : ''}.`,
       });
-    } catch (e: any) {
-      notifications.show({ color: 'red', title: 'Classification failed', message: e?.message || 'Request failed' });
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Request failed';
+      notifications.show({ color: 'red', title: 'Classification failed', message });
     } finally {
       setLoading(false);
     }
@@ -198,7 +219,7 @@ export default function ClassifySingleExoplanetPanel({
           onChange={(value) => {
             const v = value || '';
             setModelName(v);
-            const versions = Array.isArray((modelsMap as any)[v]) ? ((modelsMap as any)[v] as string[]) : [];
+            const versions = Array.isArray(modelsMap[v]) ? (modelsMap[v] as string[]) : [];
             const isVersioned = versions.length > 0 && versions.every((t) => /^\d+$/.test(t));
             setModelVersion(isVersioned ? '' : '');
           }}
