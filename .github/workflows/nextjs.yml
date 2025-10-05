@@ -48,7 +48,7 @@ jobs:
         env:
           # If deploying to user/org page (user.github.io), leave empty: ""
           # If deploying to project page (user.github.io/repo), set to "/<repo-name>"
-          NEXT_PUBLIC_BASE_PATH: "/<repo-name>"
+          NEXT_PUBLIC_BASE_PATH: ""
           NEXT_TELEMETRY_DISABLED: "1"
         run: npm run build
 
