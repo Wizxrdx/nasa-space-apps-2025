@@ -73,7 +73,7 @@ export default function ClassifyExoplanet({
     (async () => {
       try {
         setModelsLoading(true);
-        const resp = await fetch('http://52.77.216.0:8000/api/v1/models/all/', { signal: ac.signal });
+        const resp = await fetch('https://52.77.216.0:8000/api/v1/models/all/', { signal: ac.signal });
         if (!resp.ok) throw new Error(`Failed to fetch models (HTTP ${resp.status})`);
         const data = (await resp.json()) as ModelsResponse;
         const map = data?.all_models ?? {};
@@ -232,7 +232,7 @@ export default function ClassifyExoplanet({
       if (versioned && modelVersion) qs.set('version', modelVersion);
       if (evaluate) qs.set('evaluate', 'true');
 
-      const resp = await fetch(`http://52.77.216.0:8000/api/v1/predict/?${qs.toString()}`, { method: 'POST', body: form });
+      const resp = await fetch(`https://52.77.216.0:8000/api/v1/predict/?${qs.toString()}`, { method: 'POST', body: form });
       if (!resp.ok) {
         const errJson = await resp.json().catch(() => null) as unknown;
         const msg = isErrorDetail(errJson) && typeof errJson.detail === 'string' ? errJson.detail : `HTTP ${resp.status}`;
