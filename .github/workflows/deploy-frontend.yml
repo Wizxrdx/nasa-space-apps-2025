@@ -36,7 +36,7 @@ jobs:
         working-directory: frontend
         env:
           # For project pages, set to "/<repo-name>" (e.g., "/space-apps-2025")
-          NEXT_PUBLIC_BASE_PATH: "/REPO_NAME" # set to "" for user/org pages
+          NEXT_PUBLIC_BASE_PATH: ""
         run: |
           npm run build
           npx next export -o out
