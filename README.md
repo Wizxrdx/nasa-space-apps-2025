@@ -1,9 +1,9 @@
+
+
+# HERMES
 <p align="center">
   <img src="assets/logo.png" alt="HERMES Logo" width="200">
 </p>
-
-# HERMES
-
 HERMES is a web application designed for the **NASA Space Apps Challenge**, helping users classify exoplanet candidates efficiently. It allows users to upload or edit exoplanet datasets and run a machine learning model to identify **confirmed planets**, **potential candidates**, or **false positives**.
 
 Beyond predictions, HERMES delivers **interactive analytics** to reveal which features most influence decision-making — making complex astronomical insights both accessible and actionable.
